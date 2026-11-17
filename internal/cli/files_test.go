@@ -77,6 +77,40 @@ func TestFilesDownload_StreamingToFile(t *testing.T) {
 	}
 }
 
+func TestFilesDownload_DefaultPathMakesOneMetadataRequest(t *testing.T) {
+	t.Chdir(t.TempDir())
+	storage := mockStorage(t, "the bytes of the file")
+	srv := newFakeServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/files/file_abc" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"id":           "file_abc",
+			"name":         "doc.txt",
+			"presignedUrl": storage.URL,
+		})
+	})
+	ta := newTestApp(t, srv)
+	if err := runFilesDownload(context.Background(), ta.app, "file_abc", ""); err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	srv.mu.Lock()
+	requests := len(srv.requests)
+	srv.mu.Unlock()
+	if requests != 1 {
+		t.Errorf("file metadata requests = %d, want 1", requests)
+	}
+	got, err := os.ReadFile("doc.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "the bytes of the file" {
+		t.Errorf("downloaded contents = %q", got)
+	}
+}
+
 func TestFilesDownload_ToStdout(t *testing.T) {
 	storage := mockStorage(t, "abc")
 	srv := newFakeServer(t, func(w http.ResponseWriter, r *http.Request) {

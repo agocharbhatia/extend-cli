@@ -31,6 +31,12 @@ func TestDownload_FileByID(t *testing.T) {
 	if err := runDownload(context.Background(), ta.app, "file_abc", tmp, ""); err != nil {
 		t.Fatalf("runDownload: %v", err)
 	}
+	srv.mu.Lock()
+	requests := len(srv.requests)
+	srv.mu.Unlock()
+	if requests != 1 {
+		t.Errorf("file metadata requests = %d, want 1", requests)
+	}
 	got, err := os.ReadFile(filepath.Join(tmp, "hello.txt"))
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -137,6 +143,12 @@ func TestDownload_SplitRun(t *testing.T) {
 	tmp := t.TempDir()
 	if err := runDownload(context.Background(), ta.app, "splr_xyz", tmp, ""); err != nil {
 		t.Fatalf("runDownload: %v", err)
+	}
+	srv.mu.Lock()
+	requests := len(srv.requests)
+	srv.mu.Unlock()
+	if requests != 4 {
+		t.Errorf("API requests = %d, want 1 split run and 3 metadata requests", requests)
 	}
 	for _, name := range []string{"page.pdf", "page-2.pdf", "page-3.pdf"} {
 		got, err := os.ReadFile(filepath.Join(tmp, name))

@@ -231,12 +231,15 @@ func downloadSingleFile(ctx context.Context, app *App, cli *sdkclient.Client, fi
 		_, err := extendx.DownloadFile(ctx, cli, fileID, app.IO.Out)
 		return err
 	}
+	if outputFile != "" && outputDir != "" {
+		return fmt.Errorf("pass either --output-file or --output-dir, not both")
+	}
+	f, err := cli.Files.Retrieve(ctx, fileID, &extend.FilesRetrieveRequest{})
+	if err != nil {
+		return err
+	}
 	path := outputFile
 	if path == "" {
-		f, err := cli.Files.Retrieve(ctx, fileID, &extend.FilesRetrieveRequest{})
-		if err != nil {
-			return err
-		}
 		name := f.Name
 		if name == "" {
 			name = fileID + ".bin"
@@ -249,10 +252,8 @@ func downloadSingleFile(ctx context.Context, app *App, cli *sdkclient.Client, fi
 			return err
 		}
 		path = filepath.Join(dir, name)
-	} else if outputDir != "" {
-		return fmt.Errorf("pass either --output-file or --output-dir, not both")
 	}
-	return writeFileFromExtend(ctx, app, cli, fileID, path)
+	return writeFileFromExtend(ctx, app, f, path)
 }
 
 func downloadMultipleFiles(ctx context.Context, app *App, cli *sdkclient.Client, fileIDs []string, outputDir string) error {
@@ -276,7 +277,7 @@ func downloadMultipleFiles(ctx context.Context, app *App, cli *sdkclient.Client,
 		out := uniqueName(name, used)
 		used[out] = true
 		path := filepath.Join(dir, out)
-		if err := writeFileFromExtend(ctx, app, cli, fid, path); err != nil {
+		if err := writeFileFromExtend(ctx, app, f, path); err != nil {
 			return fmt.Errorf("download %s: %w", fid, err)
 		}
 	}
@@ -286,7 +287,7 @@ func downloadMultipleFiles(ctx context.Context, app *App, cli *sdkclient.Client,
 // writeFileFromExtend streams a file's bytes to outPath atomically via
 // a temp file in the same directory + rename. Matches the pattern used
 // by `extend edit --output-file`.
-func writeFileFromExtend(ctx context.Context, app *App, cli *sdkclient.Client, fileID, outPath string) error {
+func writeFileFromExtend(ctx context.Context, app *App, file *extend.File, outPath string) error {
 	dir := filepath.Dir(outPath)
 	tmp, err := os.CreateTemp(dir, ".extend-dl-*")
 	if err != nil {
@@ -294,7 +295,7 @@ func writeFileFromExtend(ctx context.Context, app *App, cli *sdkclient.Client, f
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
-	n, err := extendx.DownloadFile(ctx, cli, fileID, tmp)
+	n, err := extendx.DownloadFileContents(ctx, file, tmp)
 	tmp.Close()
 	if err != nil {
 		return err

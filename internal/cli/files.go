@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -382,31 +381,16 @@ func runFilesDownload(ctx context.Context, app *App, id, outPath string) error {
 		_, err := extendx.DownloadFile(ctx, cli, id, app.IO.Out)
 		return err
 	}
+	f, err := cli.Files.Retrieve(ctx, id, &extend.FilesRetrieveRequest{})
+	if err != nil {
+		return err
+	}
 	if outPath == "" {
-		f, err := cli.Files.Retrieve(ctx, id, &extend.FilesRetrieveRequest{})
-		if err != nil {
-			return err
-		}
 		if f.Name != "" {
 			outPath = filepath.Base(f.Name)
 		} else {
 			outPath = id
 		}
 	}
-	tmpFile, err := os.CreateTemp(filepath.Dir(outPath), ".extend-dl-*")
-	if err != nil {
-		return fmt.Errorf("create temp: %w", err)
-	}
-	tmpName := tmpFile.Name()
-	defer os.Remove(tmpName)
-	n, err := extendx.DownloadFile(ctx, cli, id, tmpFile)
-	tmpFile.Close()
-	if err != nil {
-		return err
-	}
-	if err := os.Rename(tmpName, outPath); err != nil {
-		return fmt.Errorf("rename: %w", err)
-	}
-	fmt.Fprintf(app.IO.ErrOut, "Wrote %d bytes to %s\n", n, outPath)
-	return nil
+	return writeFileFromExtend(ctx, app, f, outPath)
 }

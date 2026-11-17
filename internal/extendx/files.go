@@ -146,8 +146,14 @@ func DownloadFile(ctx context.Context, c *client.Client, id string, w io.Writer)
 	if err != nil {
 		return 0, err
 	}
+	return DownloadFileContents(ctx, f, w)
+}
+
+// DownloadFileContents reuses retrieved metadata so callers that need the
+// filename can stream the corresponding contents without a second API call.
+func DownloadFileContents(ctx context.Context, f *extend.File, w io.Writer) (int64, error) {
 	if f.PresignedURL == nil || *f.PresignedURL == "" {
-		return 0, fmt.Errorf("file %s has no presigned URL (may have expired or be unavailable)", id)
+		return 0, fmt.Errorf("file %s has no presigned URL (may have expired or be unavailable)", f.ID)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, *f.PresignedURL, nil)
 	if err != nil {
